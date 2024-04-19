@@ -1,5 +1,6 @@
 {
     "files.associations": {
         "cmath": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "C:/Users/Joseph/Documents/PlatformIO/Projects/ECE202_SpectrumAnalyzer/.pio/libdeps/esp32doit-devkit-v1/TFT_eSPI"
 }
