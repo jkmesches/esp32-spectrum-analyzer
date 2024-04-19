@@ -1,58 +1,83 @@
-/* ESP-32 Portable Spectrum Analyzer
+/*
+ * Project: ESP32 Low-Frequency Spectrum Analyzer
+ * Description: A spectrum analyzer project for the ESP32 microcontroller that analyzes low-frequency signals.
+ * Author: Joseph Mesches
+ * University: Colorado State University
+ * Course: ECE202
+ * Date: Spring 2024
+ *
+ * Copyright (c) [Year]
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 
-*/
 // Library Includes
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <TFT_eWidget.h>
 #include <arduinoFFT.h>
 #include <Free_Fonts.h>
-#include <test_data_1.h> //EKG
-#include <test_data_2.h> //Sine Wave
+#include <test_data_1.h> //EKG Test Data
+#include <test_data_2.h> //Sine Wave Test Data
 
 //Standard Definitions
 #define BAUD_RATE 115200
 #define WELCOME_TIME 1000
+
 // Pin Definitions
 /* ACQUISITION INTERFACES*/
 #define SIGNAL_PIN 34
 /* BUTTONS */
 #define BUTTON_01 13
 #define BUTTON_02 12
-#define BUTTON_03 14
+//#define BUTTON_03 14
+
+/* Constant Definitions */
+//Buttons
 #define DEBOUNCE_DELAY 250 //250ms debounce delay
 //MEASUREMENT
 #define DEFAULT_SAMPLE_FREQ 1000
 #define DEFAULT_BUFFER_SIZE 2048
-
 //Graphing
 #define FFT_GRID_COLOR TFT_BLUE
 #define FFT_TRACE_COLOR TFT_GREEN
 #define TIME_GRID_COLOR TFT_BLUE
 #define TIME_ZERO_COLOR TFT_WHITE
 #define TIME_TRACE_COLOR TFT_RED
-
 #define DEFAULT_TIME_Y_MIN -4
 #define DEFAULT_TIME_Y_MAX 4
 #define DEFAULT_TIME_Y_INC 1
-
 //Tool bar
 #define TOOLBAR_REFRESH_PERIOD 50
 #define TOOLBAR_TEXT_COLOR TFT_RED
 #define TOOLBAR_TEXT_BG_COLOR TFT_BLUE
 #define TOOLBAR_BG_COLOR TFT_BLUE
-// Instantiate Variables
 
-//Quality
+/* Instantiate Variables */
+//Timing
 volatile unsigned long sample_start_time, sample_end_time;
-
-/* BUTTONS */
+//Buttons
 volatile unsigned long button_01_last_millis = 0;
 volatile unsigned long button_02_last_millis = 0;
-volatile unsigned long button_03_last_millis = 0;
+//volatile unsigned long button_03_last_millis = 0;
 volatile bool button_01_pressed = false;
 volatile bool button_02_pressed = false;
-volatile bool button_03_pressed = false;
+//volatile bool button_03_pressed = false;
 unsigned int display_mode = 0; //0 - Graph, 1 - Data
 unsigned int data_mode = 1; //0 - Hall Sensor, 1 - Analog, 2 - Test 1, 3 - Test 2
 volatile bool acquire_data = false;
@@ -68,19 +93,19 @@ const unsigned int DATA_PERIOD_set1 = 1E6 / DATA_FREQ_set1;
 //ELECTROCARDIOGRAM TEST DATA PARAMETERS
 const unsigned int DATA_FREQ_set2 = 200;
 const unsigned int DATA_PERIOD_set2 = 1E6 / DATA_FREQ_set2;
-/* BUFFER*/
+//Buffer Parameters
 volatile unsigned long last_acquisition = 0;
 unsigned int SAMPLE_FREQ = DEFAULT_SAMPLE_FREQ;
 unsigned int SAMPLE_PERIOD;
 const unsigned int BUFFER_SIZE = DEFAULT_BUFFER_SIZE;
 const unsigned int BUFFER_POWER = log2(BUFFER_SIZE);
 const unsigned int SEC_TO_GRAPH = 10;
-//BUFFERS
+//Buffers
 float DATA_BUFFER[BUFFER_SIZE];
 float COMPLEX_BUFFER[BUFFER_SIZE];
 float TIME_BUFFER[BUFFER_SIZE];
 volatile unsigned int buffer_index = 0;
-/* SCREEN PROPERTIES */
+//Screen Properties
 unsigned long last_toolbar_refresh = 0;
 char toolbar_left[10] = "LEFT";
 char toolbar_center[10] = "CENTER";
@@ -115,17 +140,16 @@ TraceWidget frequency_trace = TraceWidget(&frequency_graph);
 //FFT Object
 ArduinoFFT<float> FFT = ArduinoFFT<float>(DATA_BUFFER, COMPLEX_BUFFER, BUFFER_SIZE, SAMPLE_FREQ);
 
-// Function Declarations
+/* Function Declarations */
 /* BUTTON LOGIC*/
 //Button Debounce
 void IRAM_ATTR buttonDebounce01();
 void IRAM_ATTR buttonDebounce02();
-void IRAM_ATTR buttonDebounce03();
+//void IRAM_ATTR buttonDebounce03();
 //Button Function
-void ChangeDisplayMode();
+//void ChangeDisplayMode();
 void ChangeDataMode();
 void ChangeAcquisitionMode();
-
 /* TFT SCREEN LOGIC*/
 //Define Screens
 void DrawGraphScreen();
@@ -143,37 +167,36 @@ void PlotTimeGraph();
 void WriteDataScreen();
 //Tool bar
 void DrawToolBar();
-
 /* DATA ACQUISITION LOGIC*/
 void AcquireData();
 float AcquireAnalog(unsigned int pin = SIGNAL_PIN);
 float AcquireTest(unsigned int set);
 float AcquireHall();
-
 /* BUFFER LOGIC*/
 void ResetBuffers();
 void WriteBuffer(float data);
-
 /* FFT LOGIC*/
 void RunFFT();
-
 /* LED LOGIC*/
 void TurnOffLED();
 void SetLEDColor(int color);
 
 void setup() {
+  //Initialize Serial Communication
+  while (!Serial) {
   Serial.begin(BAUD_RATE);
-  Serial.printf("Serial Communication Established. Baud: %d\n", BAUD_RATE);
+  }
+  Serial.printf("Serial Communication Established. Baud Rate: %d\n", BAUD_RATE);
 
   //Set PinModes
   pinMode(BUTTON_01, INPUT_PULLUP);
   pinMode(BUTTON_02, INPUT_PULLUP);
-  pinMode(BUTTON_03, INPUT_PULLUP);
+  //pinMode(BUTTON_03, INPUT_PULLUP);
 
   //Attach Interrupts
   attachInterrupt(digitalPinToInterrupt(BUTTON_01), buttonDebounce01, FALLING);
   attachInterrupt(digitalPinToInterrupt(BUTTON_02), buttonDebounce02, FALLING);
-  attachInterrupt(digitalPinToInterrupt(BUTTON_03), buttonDebounce03, FALLING);
+  //attachInterrupt(digitalPinToInterrupt(BUTTON_03), buttonDebounce03, FALLING);
 
   //Initiate TFT Screen
   tft.begin();
@@ -184,6 +207,7 @@ void setup() {
 }
 
 void loop() {
+  //Button Handlers
   if (button_01_pressed) {
     ChangeAcquisitionMode();
     button_01_pressed = false;
@@ -192,10 +216,10 @@ void loop() {
     ChangeDataMode();
     button_02_pressed = false;
   }
-  if (button_03_pressed) {
-    Serial.println("Button 03 Not Attached.");
-    button_03_pressed = false;
-  }
+  // if (button_03_pressed) {
+  //   Serial.println("Button 03 Not Attached.");
+  //   button_03_pressed = false;
+  // }
 
   DrawToolBar();
 
@@ -204,11 +228,11 @@ void loop() {
     screen_initialized = true;
     DrawGraphScreen();
   }
-  else if ((1 == display_mode) and ((current_mode != 1) or (false == screen_initialized))) {
-    current_mode == 1;
-    screen_initialized = true;
-    Serial.println("Write the data screen moron!");
-  }
+  // else if ((1 == display_mode) and ((current_mode != 1) or (false == screen_initialized))) {
+  //   current_mode == 1;
+  //   screen_initialized = true;
+  //   Serial.println("Data Screen Not Written");
+  // }
 
   if (acquire_data) {
     AcquireData();
@@ -232,13 +256,13 @@ void IRAM_ATTR buttonDebounce02() {
     button_02_pressed = true;
   }
 }
-void IRAM_ATTR buttonDebounce03() {
-  unsigned long current_millis = millis();
-  if (current_millis - button_03_last_millis > DEBOUNCE_DELAY) {
-    button_03_last_millis = current_millis;
-    button_03_pressed = true;
-  }
-}
+// void IRAM_ATTR buttonDebounce03() {
+//   unsigned long current_millis = millis();
+//   if (current_millis - button_03_last_millis > DEBOUNCE_DELAY) {
+//     button_03_last_millis = current_millis;
+//     button_03_pressed = true;
+//   }
+// }
 //Button Functions
 void ChangeDisplayMode() {
   display_mode++;
